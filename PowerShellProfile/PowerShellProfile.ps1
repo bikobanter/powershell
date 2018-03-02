@@ -4,14 +4,14 @@
 # Description  :  Powershell profile containing useful functions and commands.
 ###############################################################################################################
 
-# Aiases
+#region Aiases
 
 Set-Alias -Name ep -Value edit-profile | out-null
 
 Set-Alias -Name tch -Value Test-ConsoleHost | Out-Null
+#endregion Aliases
 
-
-# Functions
+#region Functions
 
 Function Get-WifiProfile { netsh wlan show profile }
 
@@ -48,19 +48,28 @@ Function Test-ConsoleHost {
 Function Get-DomainInfo($domain){
     (whois64.exe $domain)
 }
+#endregion Functions
 
-
-# Variables
+#region Variables
 
 New-Variable -Name doc -Value $home\documents\WindowsPowershell\Transcripts
 
+#endregion Variables
 
-# PS_Drives
-Add-VSTeamAccount -Profile codeverse -Drive vsteam
-New-PSDrive -Name vsteam -PSProvider SHiPS -Root VSTeam#VSAccount
+#region PS_Drives
+
+Add-VSTeamAccount -Profile "set your VSTS profile" -Drive "set your drive"
+New-PSDrive -Name "set your drive" -PSProvider SHiPS -Root VSTeam#VSAccount
 "`n"
 
-# Commands
+#endregion
+
+#region Commands
+
+#region Record Session History
+$historyFilePath = Join-Path ([Environment]::GetFolderPath('UserProfile')) .ps_history
+Register-EngineEvent PowerShell.Exiting -Action {Get-History | Export-Clixml $historyFilePath } | Out-Null
+if(Test-Path $historyFilePath) { Import-Clixml $historyFilePath | Add-History }
 
 Set-Location c:\
 
@@ -70,21 +79,24 @@ If(tch) {
 
     }
 
+#endregion
+
+#region Azure
+
 Login-AzureRmAccount
 
 $cred = Get-AzureRmSubscription
 
 Set-AzureRmContext -TenantId $cred.TenantId -SubscriptionId $cred.SubscriptionId
 
-# Load VSTeam module
+### Load VSTeam module
 Import-Module VSTeam
 
-# Record session history
-$historyFilePath = Join-Path ([Environment]::GetFolderPath('UserProfile')) .ps_history
-Register-EngineEvent PowerShell.Exiting -Action {Get-History | Export-Clixml $historyFilePath } | Out-Null
-if(Test-Path $historyFilePath) { Import-Clixml $historyFilePath | Add-History }
+#endregion Azure
 
-# Load posh-git module
+#region posh-git
+
+### Load posh-git module
 Import-Module posh-git
 
 # posh-git background colors
@@ -133,7 +145,10 @@ $GitPromptSettings.LocalStagedStatusSymbol = ""
 $GitPromptSettings.LocalWorkingStatusSymbol = ""
 $GitPromptSettings.ShowStatusWhenZero = $false
 
-# Customize prompt
+#endregion posh-git
+
+#region Customize prompt
+
 set-content Function:prompt {
   $title = (get-location).Path.replace($home, "~")
   $idx = $title.IndexOf("::")
@@ -174,3 +189,7 @@ set-content Function:prompt {
   $host.UI.RawUI.WindowTitle = $title
   return " "
 }
+
+#endregion Customize prompt
+
+#endregion Commands
