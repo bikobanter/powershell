@@ -48,6 +48,10 @@ Function Test-ConsoleHost {
 Function Get-DomainInfo($domain){
     (whois64.exe $domain)
 }
+
+Function Edit-Profile{
+            ise "<PowershellProfilePath>"
+}
 #endregion Functions
 
 #region Variables
