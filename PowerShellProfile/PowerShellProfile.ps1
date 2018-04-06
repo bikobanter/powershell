@@ -11,6 +11,7 @@ Set-Alias -Name ep -Value edit-profile | Out-Null
 Set-Alias -Name tch -Value Test-ConsoleHost | Out-Null
 
 Set-Alias -Name info -Value Get-DomainInfo | Out-Null
+
 #endregion Aliases
 
 #region Functions
@@ -273,11 +274,11 @@ Add-VSTeamAccount -Profile "set your VSTS profile" -Drive "set your drive"
 New-PSDrive -Name "set your drive" -PSProvider SHiPS -Root VSTeam#VSAccount
 "`n"
 
-#endregion
+#endregion PS_Drives
 
 #region Commands
 
-#region Record Session History
+#region RecordSessionHistory
 $historyFilePath = Join-Path ([Environment]::GetFolderPath('UserProfile')) .ps_history
 Register-EngineEvent PowerShell.Exiting -Action {Get-History | Export-Clixml $historyFilePath } | Out-Null
 if(Test-Path $historyFilePath) { Import-Clixml $historyFilePath | Add-History }
@@ -289,6 +290,10 @@ If(tch) {
     Start-Transcript -Path (Join-Path -Path $doc -ChildPath $(Get-TranscriptName))
 
     }
+
+#endregion RecordSessionHistory
+
+#region UpdatePSModules
 
 if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
 
@@ -304,7 +309,7 @@ Start-JobWithNotification -Name AzureRMJob -ScriptBlock {Update-Module AzureRM -
 
 }
 
-#endregion
+#endregion UpdatePSModules
 
 #region Azure
 
