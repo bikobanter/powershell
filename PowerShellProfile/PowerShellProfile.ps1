@@ -1,425 +1,404 @@
-﻿###############################################################################################################
-# Powershell Version : 5.1
-# Author       :  bikobaingaru (https://github.com/bikobaingaru)
+﻿###############################################################################
+# Language     :  PowerShell Core
+# Filename     :  Powershell_Profile.ps1
 # Description  :  Powershell profile containing useful functions and commands.
-###############################################################################################################
+# Repository   :  https://github.com/bikobanter/PowerShell
+###############################################################################
 
-#region Aiases
-
-Set-Alias -Name ep -Value edit-profile | Out-Null
-
-Set-Alias -Name tch -Value Test-ConsoleHost | Out-Null
-
-Set-Alias -Name info -Value Get-DomainInfo | Out-Null
-
-#endregion Aliases
-
-#region Functions
-
-Function Get-WifiProfile { netsh wlan show profile }
-
-Function Remove-WifiProfile ($SSID){
-
-    (netsh wlan delete profile $SSID)
+#region functions
+$ppFunctions = Get-ChildItem function:
+function MyFunctions {
+    Get-ChildItem function: | Where-Object { $ppFunctions -notcontains $_ }    
+}
+function Get-EnvironmentVariables{
+    Get-ChildItem env:* | sort-object name
+}
+function Set-EnvironmentVariable{
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$VariableName,
+        [Parameter(Mandatory=$true)]
+        [string]$VariableValue
+    )
+    Set-Item -Path Env:$VariableName -Value $VariableValue
 }
 
-Function Remove-AllWifiProfiles {
+function Get-WifiProfile { 
+    netsh wlan show profile 
+}
+function Remove-WifiProfile {        
+    param
+    (
+        $SSID
+    )
+    (netsh wlan delete profile $SSID)
+}
+function Remove-AllWifiProfiles {
+    
+function Get-AllWifiProfiles {
+        param
+        (
+            [Parameter(Mandatory = $true, ValueFromPipeline = $true, HelpMessage = 'Data to process')]
+            $InputObject
+        )
+        process {
+            $InputObject.Line.Substring(27)
+        }
+    }
 
-    $ssid = netsh wlan show profile | Select-String 'All User Profile' | ForEach-Object {$_.Line.Substring(27)}
-
-    ForEach($id in $ssid){
+    $ssid = netsh wlan show profile | Select-String 'All User Profile' | Get-AllWifiProfiles
+    
+    ForEach ($id in $ssid) {
         netsh wlan delete profile $id.ToString()
     }
 }
-
-Function Get-TranscriptName {
+function Get-TranscriptName {
 
     $invalidChars = [io.path]::GetInvalidFileNamechars()
 
     $date = Get-Date -format s
 
-    "{0}.{1}.{2}.txt" -f"Powershell_Transcript",$env:COMPUTERNAME,($date.ToString() -replace "[$invalidChars]","-")
+    "{0}.{1}.{2}.txt" -f "Powershell_Transcript", $env:COMPUTERNAME, ($date.ToString() -replace "[$invalidChars]", "-")
+}
+function Test-ConsoleHost {
+    if (($host.Name -match 'consolehost')) { $true }
+    Else { $false }
 }
 
-Function Test-ConsoleHost {
-
-    if(($host.Name -match 'consolehost')) {$true}
-    Else{$false}
-
+function Edit-Profile {
+    code F:\OneDrive\PowerShell\Powershell_Profile.ps1
 }
-
-Function Get-DomainInfo($domain){
-    (whois64.exe $domain)
+function Enter-Azure {
+    $space = " "
+    Write-Host -Message $space
+    Write-Host -Message "Attempting Azure login..."
+    Write-Host -Message $space
+    az login --use-device-code
 }
+function Find-OldDuplicateModules {
+    Write-Host -Message "This will report all modules with duplicate (older and newer) versions installed"
+    Write-Host -Message "Be sure to run this as an admin"
+    Write-Host -Message "(You can update all your Azure modules with update-module Az -force)"
 
-Function Edit-Profile{
-            ise "<PowershellProfilePath>"
-}
+    $mods = get-installedmodule
 
-Function Start-JobWithNotification {
-    <#
-    .DESCRIPTION
-    A wrapper function for the Start-Job cmdlet. Adds the capability to notify you when a long running job completes. Notifications can be either a system beep or a toast. for help with Start-Job see https://technet.microsoft.com/library/hh849698.aspx.
+    foreach ($Mod in $mods) {
+        Write-Host -Message "Checking $($mod.name)"
+        $latest = get-installedmodule $mod.name
+        $specificmods = get-installedmodule $mod.name -allversions
+        Write-Host -Message "$($specificmods.count) versions of this module found [ $($mod.name) ]"
     
-    This function should not be used in scripts or at the command line when many jobs will be created. This will overwhelm the user with too many beeps or toast messages and won't be very useful. The primary use for this is when you need to perform a long running job
-    or two at the command line and you want a reminder when it completes.
-    .EXAMPLE
-    Start-JobWithNotification -Name NotifyJob -ScriptBlock {1..10 | foreach {Write-Host $_; start-sleep -Seconds 1}} -NotificationType Beep,toast
-    Starts a job with a beep and toast notification
-    .PARAMETER NotificationType
-    How you would like to be notified of job completion. Accepts values 'Toast' or 'Beep', or both.
-    .FORWARDHELPTARGETNAME Start-Job
-    .FORWARDHELPCATEGORY Cmdlet
     
-    DISCLAIMER: This script is provided 'AS IS'. It has been tested for personal use, please   
-    test in a lab environment before using in a production environment.
-    #>
-    [CmdletBinding(DefaultParameterSetName='ComputerName')]
-     param(
-         [Parameter(ParameterSetName='DefinitionName', Mandatory=$true, Position=0)]
-         [ValidateNotNullOrEmpty()]
-         [string]
-      $DefinitionName, 
-         [Parameter(ParameterSetName='DefinitionName', Position=1)]
-         [ValidateNotNullOrEmpty()]
-         [string]
-      $DefinitionPath, 
-         [Parameter(ParameterSetName='DefinitionName', Position=2)]
-         [ValidateNotNullOrEmpty()]
-         [string]
-      $Type, 
-         [Parameter(ParameterSetName='ComputerName', ValueFromPipelineByPropertyName=$true)]
-         [Parameter(ParameterSetName='LiteralFilePathComputerName', ValueFromPipelineByPropertyName=$true)]
-         [Parameter(ParameterSetName='FilePathComputerName', ValueFromPipelineByPropertyName=$true)]
-         [string]
-      $Name, 
-         [Parameter(ParameterSetName='ComputerName', Mandatory=$true, Position=0)]
-         [Alias('Command')]
-         [scriptblock]
-      $ScriptBlock, 
-         [Parameter(ParameterSetName='FilePathComputerName')]
-         [Parameter(ParameterSetName='ComputerName')]
-         [Parameter(ParameterSetName='LiteralFilePathComputerName')]
-         [pscredential]
-         [System.Management.Automation.CredentialAttribute()]
-      $Credential, 
-         [Parameter(ParameterSetName='FilePathComputerName', Mandatory=$true, Position=0)]
-         [string]
-      $FilePath, 
-         [Parameter(ParameterSetName='LiteralFilePathComputerName', Mandatory=$true)]
-         [Alias('PSPath')]
-         [string]
-      $LiteralPath, 
-         [Parameter(ParameterSetName='FilePathComputerName')]
-         [Parameter(ParameterSetName='ComputerName')]
-         [Parameter(ParameterSetName='LiteralFilePathComputerName')]
-         [System.Management.Automation.Runspaces.AuthenticationMechanism]
-      $Authentication, 
-         [Parameter(ParameterSetName='ComputerName', Position=1)]
-         [Parameter(ParameterSetName='LiteralFilePathComputerName', Position=1)]
-         [Parameter(ParameterSetName='FilePathComputerName', Position=1)]
-         [scriptblock]
-      $InitializationScript, 
-         [Parameter(ParameterSetName='LiteralFilePathComputerName')]
-         [Parameter(ParameterSetName='FilePathComputerName')]
-         [Parameter(ParameterSetName='ComputerName')]
-         [switch]
-      $RunAs32, 
-         [Parameter(ParameterSetName='LiteralFilePathComputerName')]
-         [Parameter(ParameterSetName='FilePathComputerName')]
-         [Parameter(ParameterSetName='ComputerName')]
-         [ValidateNotNullOrEmpty()]
-         [version]
-      $PSVersion, 
-         [Parameter(ParameterSetName='ComputerName', ValueFromPipeline=$true)]
-         [Parameter(ParameterSetName='LiteralFilePathComputerName', ValueFromPipeline=$true)]
-         [Parameter(ParameterSetName='FilePathComputerName', ValueFromPipeline=$true)]
-         [psobject]
-      $InputObject, 
-         [Parameter(ParameterSetName='FilePathComputerName')]
-         [Parameter(ParameterSetName='ComputerName')]
-         [Parameter(ParameterSetName='LiteralFilePathComputerName')]
-         [Alias('Args')]
-         [System.Object[]]
-      $ArgumentList,
-    
-        [ValidateSet('Toast','Beep')]
-        [string[]]
-      $NotificationType = 'Toast'
-    ) 
-     begin
-     {
-        function Toast {
-            param (
-                $Icon = "$PsScriptRoot\Powershell.ico",
-                            
-                [String]
-                $Title = 'Powershell Job Notifier',
-                          
-                [String]
-                $Message,
-                            
-                [ValidateRange(10,30)]
-                [int]
-                $LifeTime = 10
-            )
+        foreach ($sm in $specificmods) {
+            if ($sm.version -eq $latest.version) 
+            { $color = "green" }
+            else
+            { $color = "magenta" }
+            Write-Host -Message " $($sm.name) - $($sm.version) [highest installed is $($latest.version)]"
         
-            Add-Type -AssemblyName System.Windows.Forms
-            $NotifyIcon = New-Object System.Windows.Forms.NotifyIcon
-            $NotifyIcon.Icon = $Icon
-            $NotifyIcon.BalloonTipIcon = 'Info'
-            $NotifyIcon.BalloonTipText = $Message
-            $NotifyIcon.BalloonTipTitle = $Title
-            $NotifyIcon.Visible = $True 
-            $NotifyIcon.ShowBalloonTip(($Lifetime * 1000))
         }
-                
-        function Beep {
-            param (
-                [int]$Frequency = 440,
-                [int]$Duration = 500
-            )
-                    
-            [System.Console]::Beep($Frequency, $Duration)
+        Write-Host -Message "------------------------"
+    }
+    Write-Host -Message "done"
+}
+function Remove-OldDuplicateModules {
+    Write-Host -Message "this will remove all old versions of installed modules"
+    Write-Host -Message "be sure to run this as an admin"
+    Write-Host -Message "(You can update all your Azure modules with update-module Az -force)"
+
+    $mods = get-installedmodule
+
+    foreach ($Mod in $mods) {
+        Write-Host -Message "Checking $($mod.name)"
+        $latest = get-installedmodule $mod.name
+        $specificmods = get-installedmodule $mod.name -allversions
+        Write-Host -Message "$($specificmods.count) versions of this module found [ $($mod.name) ]"
+    
+        foreach ($sm in $specificmods) {
+            if ($sm.version -ne $latest.version) {
+                Write-Host -Message "uninstalling $($sm.name) - $($sm.version) [latest is $($latest.version)]"
+                $sm | uninstall-module -force
+                Write-Host -Message "done uninstalling $($sm.name) - $($sm.version)"
+                Write-Host -Message "    --------"
+            }
+        
         }
-         try
-         {
-             $outBuffer = $null
-             if ($PSBoundParameters.TryGetValue('OutBuffer', [ref]$outBuffer))
-             {
-                 $PSBoundParameters['OutBuffer'] = 1
-             }
-             $wrappedCmd = $ExecutionContext.InvokeCommand.GetCommand('Start-Job', [System.Management.Automation.CommandTypes]::Cmdlet)
-             $Action = {
-                    function Toast {
-                    param (
-                        $Icon = "$PsScriptRoot\Powershell.ico",
-                                    
-                        [String]
-                        $Title = 'Powershell Job Notifier',
-                                  
-                        [String]
-                        $Message,
-                                    
-                        [ValidateRange(10,30)]
-                        [int]
-                        $LifeTime = 10
-                    )
+        Write-Host -Message "------------------------"
+    }
+    Write-Host -Message "done"
+}
+function Get-Dns {
+
+    Write-Host -Message " "
+    Write-Host -Message "Retrieving active DNS client server address.."
+
+    $ActiveAdapter = Get-NetAdapter -Physical | Where-Object status -EQ 'up'
+
+    Get-DnsClientServerAddress -InterfaceIndex $ActiveAdapter.ifIndex | Format-Table -Property ifIndex, Name, ServerAddresses
+}
+function Set-CloudflareDNS {
     
-                    Add-Type -AssemblyName System.Windows.Forms
-                    $NotifyIcon = New-Object System.Windows.Forms.NotifyIcon
-                    $NotifyIcon.Icon = $Icon
-                    $NotifyIcon.BalloonTipIcon = 'Info'
-                    $NotifyIcon.BalloonTipText = $Message
-                    $NotifyIcon.BalloonTipTitle = $Title
-                    $NotifyIcon.Visible = $True 
-                    $NotifyIcon.ShowBalloonTip(($Lifetime))
-                    }
-                            
-                    function Beep {
-                        param (
-                            [int]$Frequency = 440,
-                            [int]$Duration = 500
-                        )
-                                
-                        [System.Console]::Beep($Frequency, $Duration)
-                    }     
-                switch ($Event.MessageData)
-                {
-                    {$_ -contains 'Beep'}  {Beep}
-                    {$_ -contains 'Toast'} {Toast -Message "Powershell Job $($Event.SourceArgs[0].Name.ToUpper()) has changed to state $($Event.SourceArgs[0].JobStateInfo.state.ToString().toupper())."}
-                }
-                $EventSubscriber | Unregister-Event
-                $EventSubscriber.Action | Remove-Job
-             }
+    $NIC_PreferredDNS = "1.1.1.1"
+    $NIC_AlternateDNS = "1.0.0.1"
+
+    ## $NIC_PreferredDNS_IPV6 = "2606:4700:4700::1111"
+    ## $NIC_AlternateDNS_IPV6 = "2606:4700:4700::1001"
+
+    $ActiveAdapter = Get-NetAdapter -Physical | Where-Object status -EQ 'up'
+
+    Write-Host -Message " "
+    Write-Host -Message "Setting Cloudflare as DNS resolver..."
+
+    Set-DnsClientServerAddress -InterfaceIndex $ActiveAdapter.InterfaceIndex -ServerAddresses($NIC_PreferredDNS, $NIC_AlternateDNS)
+    Get-DnsClientServerAddress -InterfaceIndex $ActiveAdapter.InterfaceIndex | Format-Table -Property InterfaceIndex, InterfaceAlias, ServerAddresses
+}
+function Set-GoogleDNS {
     
-             $PSBoundParameters.Remove('NotificationType') | out-null
-    
-             $scriptCmd =
-             {
-                & $wrappedCmd @PSBoundParameters |
-                    ForEach-Object {
-                        Register-ObjectEvent -InputObject $_ -EventName 'StateChanged' -Action $Action -MessageData $NotificationType |
-                            Out-Null; $_
-                    }
-             }
-             $steppablePipeline = $scriptCmd.GetSteppablePipeline($myInvocation.CommandOrigin)
-             $steppablePipeline.Begin($PSCmdlet)
-         }
-         catch {throw}
-     }
-     
-     process
-     {
-         try {$steppablePipeline.Process($_)} catch {throw}
-     }
-     
-     end
-     {
-         try {$steppablePipeline.End()} catch {throw}
-     }
+    $NIC_PreferredDNS = "8.8.8.8"
+    $NIC_AlternateDNS = "8.8.4.4"
+
+    ## $NIC_PreferredDNS_IPV6 = "2606:4700:4700::1111"
+    ## $NIC_AlternateDNS_IPV6 = "2606:4700:4700::1001"
+
+    $ActiveAdapter = Get-NetAdapter -Physical | Where-Object status -EQ 'up'
+
+    Write-Host -Message " "
+    Write-Host -Message "Setting Google as DNS resolver..."
+
+    Set-DnsClientServerAddress -InterfaceIndex $ActiveAdapter.InterfaceIndex -ServerAddresses($NIC_PreferredDNS, $NIC_AlternateDNS)
+    Get-DnsClientServerAddress -InterfaceIndex $ActiveAdapter.InterfaceIndex | Format-Table -Property InterfaceIndex, InterfaceAlias, ServerAddresses
+}
+function Set-CustomDNS {
+    # IPv4 DNS Address
+    param
+    (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, HelpMessage = 'IPv4 Address')]
+        [integer]
+        $NIC_PreferredDNS
+    )    
+
+
+    $ActiveAdapter = Get-NetAdapter -Physical | Where-Object status -EQ 'up'
+
+    Write-Host -Message " "
+        
+    Set-DnsClientServerAddress -InterfaceIndex $ActiveAdapter.InterfaceIndex -ServerAddresses($NIC_PreferredDNS)
+}
+function Remove-DisableAntiSpyware {
+    REG DELETE "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v DisableAntiSpyware   
+}
+function Prompt {
+    $loc = Get-Location
+
+    $prompt = & $GitPromptScriptBlock
+
+    if ($env:ConEmuANSI -eq "ON") {
+        $prompt += "$([char]27)]9;12$([char]7)"
+        if ($loc.Provider.Name -eq "FileSystem") {
+            $prompt += "$([char]27)]9;9;`"$($loc.Path)`"$([char]7)"
+        }
     }
 
-#endregion Functions
+    $prompt
+}
+function Update-DotNetTools {
+    <#
+      .DESCRIPTION
+      Updates all installed dotnet tools.
+  #>
+    & 'F:\UpdateDotnetTools.ps1'
+}
+function Update-AzureCLI {
+    Write-Host -Message " "
+    Write-Host -Message "Updating Azure cli ..."
+
+    Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile .\AzureCLI.msi; Start-Process msiexec.exe -Wait -ArgumentList '/I AzureCLI.msi /passive'
+}
+function Optimize-PSReadLineHistory {
+    <#
+    .SYNOPSIS
+        Optimize the PSReadline history file
+    .DESCRIPTION
+        The PSReadline module can maintain a persistent command-line history. However, there are no provisions for managing the file. When the file gets very large, performance starting PowerShell can be affected. This command will trim the history file to a specified length as well as removing any duplicate entries.
+    .PARAMETER MaximumLineCount
+    Set the maximum number of lines to store in the history file.
+    .PARAMETER Passthru
+    By default this command does not write anything to the pipeline. Use -Passthru to get the updated history file.
+    .EXAMPLE
+        PS C:\> Optimize-PSReadelineHistory
+        
+        Trim the PSReadlineHistory file to default maximum number of lines.
+    .EXAMPLE
+        PS C:\> Optimize-PSReadelineHistory -maximumlinecount 500 -passthru
+
+            Directory: C:\Users\yourUsername\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadline
+
+
+            Mode                LastWriteTime         Length Name
+            ----                -------------         ------ ----
+            -a----        11/2/2017   8:21 AM           1171 ConsoleHost_history.txt
+                    
+        Trim the PSReadlineHistory file to 500 lines and display the file listing.
+    .INPUTS
+        None
+    .OUTPUTS
+       None
+    .NOTES
+        version 1.0
+    .LINK
+    Get-PSReadlineOption
+    .LINK
+    Set-PSReadlineOption
+    #>
+    [cmdletbinding(SupportsShouldProcess)]
+    Param(
+        [Parameter(ValueFromPipeline)]
+        [int32]$MaximumLineCount = $MaximumHistoryCount,
+        [switch]$Passthru
+    )
+    Begin {
+        Write-Verbose "[$((Get-Date).TimeofDay) BEGIN  ] Starting $($myinvocation.mycommand)"
+        $History = (Get-PSReadlineOption).HistorySavePath
+    } #begin
+
+    Process {
+        if (Test-Path -path $History) {
+            Write-Verbose "[$((Get-Date).TimeofDay) PROCESS] Measuring $history"
+            $myHistory = Get-Content -Path $History
+    
+            Write-Verbose "[$((Get-Date).TimeofDay) PROCESS] Found $($myHistory.count) lines of history"
+            $count = $myHistory.count - $MaximumLineCount
+            
+            if ($count -gt 0) {
+                Write-Verbose "[$((Get-Date).TimeofDay) PROCESS] Trimming $count lines to meet max of $MaximumLineCount lines"
+                 $myHistory | Select-Object -skip $count -Unique  | Set-Content -Path $History
+                
+            }
+        }
+        else {
+            Write-Warning "Failed to find $history"
+        }
+
+    } #process
+
+    End {
+        If ($Passthru) {
+            Get-Item -Path $History
+        }
+        Write-Verbose "[$((Get-Date).TimeofDay) END    ] Ending $($myinvocation.mycommand)"
+    } #end 
+
+} #close Name
+
+#endregion functions
+
+#region Aliases
+
+$null = Set-Alias -Name ep -Value Edit-Profile
+
+$null = Set-Alias -Name azure -Value Enter-Azure
+
+$null = Set-Alias -Name env -Value Get-EnvironmentVariables
+
+$null = Set-Alias -Name tch -Value Test-ConsoleHost
+
+$null = Set-Alias -Name loc -Value Get-Location
+
+#endregion Aliases
 
 #region Variables
 
-New-Variable -Name doc -Value $home\documents\WindowsPowershell\Transcripts
+New-Variable -Name transcripts -Value $home\Documents\PowerShell\Transcripts
 
 #endregion Variables
 
-#region PS_Drives
+#region ImportModules
 
-Add-VSTeamAccount -Profile "set your VSTS profile" -Drive "set your drive"
-New-PSDrive -Name "set your drive" -PSProvider SHiPS -Root VSTeam#VSAccount
-"`n"
+Import-Module powershellget
+Import-Module posh-git
+if ($host.Name -eq 'ConsoleHost') {
+    Import-Module PSReadLine
+    Set-PSReadLineOption -PredictionSource History
+    Set-PSReadLineOption -PredictionViewStyle ListView
+    Set-PSReadLineOption -Colors @{ InlinePrediction = '#FF7700' }
+    Set-PSReadLineOption -EditMode Windows
+}
+Set-PSReadLineKeyHandler -Key Ctrl+Shift+b `
+    -BriefDescription BuildCurrentDirectory `
+    -LongDescription "dotnet Build the current directory" `
+    -ScriptBlock {
+    [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    [Microsoft.PowerShell.PSConsoleReadLine]::Insert("dotnet build")
+    [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
+}
+Set-PSReadLineKeyHandler -Key Ctrl+Shift+c `
+    -BriefDescription CleanCurrentDirectory `
+    -LongDescription "dotnet Clean the current project" `
+    -ScriptBlock {
+    [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    [Microsoft.PowerShell.PSConsoleReadLine]::Insert("dotnet clean")
+    [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
+}
+Set-PSReadLineKeyHandler -Key Ctrl+Shift+r `
+    -BriefDescription BuildCurrentDirectory `
+    -LongDescription "dotnet Run a project" `
+    -ScriptBlock {
+    [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    [Microsoft.PowerShell.PSConsoleReadLine]::Insert("dotnet run --project src\WebApp\WebApp.csproj --property WarningLevel=0")
+    [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
+}
+Set-PSReadLineKeyHandler -Key Ctrl+Shift+x `
+    -BriefDescription TestCurrentDirectory `
+    -LongDescription "dotnet Test the current directory" `
+    -ScriptBlock {
+    [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    [Microsoft.PowerShell.PSConsoleReadLine]::Insert("dotnet test")
+    [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
+}
 
-#endregion PS_Drives
+Import-Module Terminal-Icons
+Import-Module z
+Import-Module oh-my-posh
+Set-PoshPrompt -Theme blue-owl-mod
 
-#region Commands
+$GitPromptSettings.EnableStashStatus = $true
+$GitPromptSettings.DefaultPromptAbbreviateHomeDirectory = $true
+$GitPromptSettings.DefaultPromptBeforeSuffix.Text = "`n"
+
+$DefaultUser = 'yourUsername'
+
+#endregion ImportModules
+
+#region COMMANDS
+
+# Enable TLS 1.2 as default
+[Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 
 #region RecordSessionHistory
+
 $historyFilePath = Join-Path ([Environment]::GetFolderPath('UserProfile')) .ps_history
-Register-EngineEvent PowerShell.Exiting -Action {Get-History | Export-Clixml $historyFilePath } | Out-Null
-if(Test-Path $historyFilePath) { Import-Clixml $historyFilePath | Add-History }
+Register-EngineEvent PowerShell.Exiting -Action { Get-History | Export-Clixml $historyFilePath } | Out-Null
+if (Test-Path $historyFilePath) { Import-Clixml $historyFilePath | Add-History }
 
-Set-Location c:\
+if ($env:USERNAME -like 'yourUsername') {
+    Set-Location F:\
+}
+else {
+    Set-Location C:\
+}
 
-If(tch) {
-
-    Start-Transcript -Path (Join-Path -Path $doc -ChildPath $(Get-TranscriptName))
-
-    }
+If (tch) {
+    Start-Transcript -Path (Join-Path -Path $transcripts -ChildPath $(Get-TranscriptName)) -Verbose
+}
 
 #endregion RecordSessionHistory
 
-#region UpdatePSModules
-
-if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
-
-[Security.Principal.WindowsBuiltInRole] "Administrator"))
-
-{
-
-Start-JobWithNotification -Name HelpJob -ScriptBlock {Update-Help -Force} -NotificationType Beep
-
-Start-JobWithNotification -Name AzureJob -ScriptBlock {Update-Module Azure -Verbose -Force} -NotificationType Beep
-
-Start-JobWithNotification -Name AzureRMJob -ScriptBlock {Update-Module AzureRM -Verbose -Force} -NotificationType Beep
-
+#PowerShell parameter completion shim for the dotnet CLI
+Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock {
+    param($commandName, $wordToComplete, $cursorPosition)
+    dotnet complete --position $cursorPosition "$wordToComplete" | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
 }
-
-#endregion UpdatePSModules
-
-#region Azure
-
-Login-AzureRmAccount
-
-$cred = Get-AzureRmSubscription
-
-Set-AzureRmContext -TenantId $cred.TenantId -SubscriptionId $cred.SubscriptionId
-
-### Load VSTeam module
-Import-Module VSTeam
-
-#endregion Azure
-
-#region posh-git
-
-### Load posh-git module
-Import-Module posh-git
-
-# posh-git background colors
-$baseBackgroundColor = "DarkBlue"
-$GitPromptSettings.AfterBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.AfterStashBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BeforeBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BeforeIndexBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BeforeStashBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BranchAheadStatusBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BranchBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BranchBehindAndAheadStatusBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BranchBehindStatusBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BranchGoneStatusBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.BranchIdenticalStatusToBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.DelimBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.IndexBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.ErrorBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.LocalDefaultStatusBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.LocalStagedStatusBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.LocalWorkingStatusBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.StashBackgroundColor = $baseBackgroundColor
-$GitPromptSettings.WorkingBackgroundColor = $baseBackgroundColor
-
-# posh-git foreground colors
-$GitPromptSettings.AfterForegroundColor = "Blue"
-$GitPromptSettings.BeforeForegroundColor = "Blue"
-$GitPromptSettings.BranchForegroundColor = "Blue"
-$GitPromptSettings.BranchGoneStatusForegroundColor = "Blue"
-$GitPromptSettings.BranchIdenticalStatusToForegroundColor = "White"
-$GitPromptSettings.DefaultForegroundColor = "Gray"
-$GitPromptSettings.DelimForegroundColor = "Blue"
-$GitPromptSettings.IndexForegroundColor = "Green"
-$GitPromptSettings.WorkingForegroundColor = "Yellow"
-
-# posh-git prompt shape
-$GitPromptSettings.AfterText = " "
-$GitPromptSettings.BeforeText = "  "
-$GitPromptSettings.BranchAheadStatusSymbol = "⬆"
-$GitPromptSettings.BranchBehindStatusSymbol = "⬇"
-$GitPromptSettings.BranchBehindAndAheadStatusSymbol = "⬆⬇"
-$GitPromptSettings.BranchGoneStatusSymbol = ""
-$GitPromptSettings.BranchIdenticalStatusToSymbol = ""
-$GitPromptSettings.DelimText = " ║"
-$GitPromptSettings.LocalStagedStatusSymbol = ""
-$GitPromptSettings.LocalWorkingStatusSymbol = ""
-$GitPromptSettings.ShowStatusWhenZero = $false
-
-#endregion posh-git
-
-#region Customize prompt
-
-set-content Function:prompt {
-  $title = (get-location).Path.replace($home, "~")
-  $idx = $title.IndexOf("::")
-  if ($idx -gt -1) { $title = $title.Substring($idx + 2) }
-
-  $windowsIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-  $windowsPrincipal = new-object 'System.Security.Principal.WindowsPrincipal' $windowsIdentity
-  if ($windowsPrincipal.IsInRole("Administrators") -eq 1) { $color = "Red"; }
-  else { $color = "Green"; }
-
-  $Host.UI.RawUI.ForegroundColor = $GitPromptSettings.DefaultForegroundColor
-
-  if ($LASTEXITCODE -ne 0) {
-      write-host " " -NoNewLine
-      write-host "  $LASTEXITCODE " -NoNewLine -BackgroundColor DarkRed -ForegroundColor Yellow
-  }
-
-  if ($PromptEnvironment -ne $null) {
-      write-host " " -NoNewLine
-      write-host $PromptEnvironment -NoNewLine -BackgroundColor DarkMagenta -ForegroundColor White
-  }
-
-  if (Get-GitStatus -ne $null) {
-      write-host " " -NoNewLine
-      Write-VcsStatus
-  }
-
-  $global:LASTEXITCODE = 0
-
-  if ((get-location -stack).Count -gt 0) {
-    write-host " " -NoNewLine
-    write-host (("+" * ((get-location -stack).Count))) -NoNewLine -ForegroundColor Cyan
-  }
-
-  write-host " " -NoNewLine
-  write-host "PS>" -NoNewLine -ForegroundColor $color
-
-  $host.UI.RawUI.WindowTitle = $title
-  return " "
-}
-
-#endregion Customize prompt
-
-#endregion Commands
+#endregion COMMANDS
